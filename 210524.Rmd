@@ -1,0 +1,109 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+library(tidyverse)
+library(shiny)
+library(htmlwidgets)
+
+data_set <- read_csv2("N:/4_PROJETS/2022/EMAD_22TQ_Ratio/StageM2_2024/Analyse_R/data_set.csv",
+                      col_types = cols(Idbis = col_character(), 
+                                       TIME = col_number(), 
+                                       OBS_CFU = col_number(), 
+                                       LOG10_CFU = col_number(), 
+                                       delta_LOG10 = col_number(), 
+                                       CMI = col_number(), 
+                                       xCMI = col_number(), 
+                                       OUTLIER = col_number(), 
+                                       SHAPE = col_number()), 
+                      trim_ws = TRUE)
+
+View(data_set)
+
+data_set$ID<-as.factor(data_set$ID)
+
+#Enlever les OUTLIER==1
+data_set %>% filter(OUTLIER==0)->data_set
+
+#Creer colonne avec concentration en ATB (?g/mL)
+data_set$CONC<-data_set$CMI*data_set$xCMI
+
+library(paletteer)
+
+#Graphe de chaque KC
+ggplot(data_set, aes(x = TIME, y = LOG10_CFU, group = xCMI, color = factor(xCMI))) +
+  geom_line() +
+  geom_point(shape = 18) +
+  scale_color_paletteer_d("ggthemes::gdoc") +
+  facet_wrap(~ ID)
+
+# Cr?er une fonction pour calculer l'aire sous une courbe en utilisant la m?thode des trap?zes
+calculate_area_trapezoids <- function(x, y) {
+  # S'assurer que les donn?es sont tri?es par x
+  sorted_indices <- order(x)
+  x <- x[sorted_indices]
+  y <- y[sorted_indices]
+  # Calculer l'aire en utilisant la m?thode des trap?zes
+  area <- sum(diff(x) * (head(y, -1) + tail(y, -1)) / 2)
+  return(area)
+}
+
+# Agr?ger les donn?es par ID, xCMI et TIME, en calculant la moyenne de LOG10_CFU pour chaque groupe
+grouped_data_2 <- data_set %>%
+  group_by(ID, xCMI, TIME) %>%
+  summarize(avg_LOG10_CFU = mean(LOG10_CFU, na.rm = TRUE), .groups = 'drop')
+
+# Calculer l'aire sous chaque courbe pour chaque combinaison de ID et xCMI
+areas <- grouped_data_2 %>%
+  group_by(ID, xCMI) %>%
+  summarize(area_under_curve = calculate_area_trapezoids(TIME, avg_LOG10_CFU), .groups = 'drop')
+
+# AUC : histogramme par xCMI
+ggplot(areas, aes(x = factor(xCMI), y = area_under_curve, fill = factor(xCMI))) +
+  geom_bar(stat = "identity") +
+  facet_wrap(~ ID) +
+  labs(title = "Aire sous chaque courbe par ID et xCMI", x = "xCMI", y = "Aire sous la courbe") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_fill_discrete(name = "xCMI")
+
+library(lattice)
+library(mvtnorm)
+library(DoseFinding)
+library(readr)
+library(stats)
+library(modelr)
+library(tidyverse)
+library(gridExtra)
+
+
+Ix<-areas$area_under_curve/24
+
+tableau_Ix <- data.frame(ID = areas$ID, xCMI = areas$xCMI, Ix = Ix)
+
+delta_I_x<- Ix - 
+
+# Appliquer le mod?le Sigmoide Emax
+
+# D?finir le mod?le nls
+essai_model <- nls(y ~ delta_i_max - ((delta_i_max - delta_i_min) * ((CONC / EC2LOG)^gam) / (((-2 - delta_i_min) / delta_i_max + 2) + (CONC / EC2LOG)^gam)),
+                     data = data_set, # nom du dataset
+                     start = list(delta_i_max = max(data_set$delta_LOG10), # valeurs initiales pour aider l'algorithme, prendre les valeurs du tableau publi?
+                                  delta_i_min = min(data_set$delta_LOG10),
+                                  EC2LOG = 1.13,
+                                  gam = 2.2) # modifiez l'?quation comme dans le publi, avec y = deltaI(x) et x = conc antibio
+
+#obtenir les valeurs des param?tres
+summary(essai_model)
+
+#obtenir la valeur de R?
+rsquare(essai_model,data_set)
+
+
+#afficher le graphe
+new <- data.frame(AUC_CMI=seq(0, 800, by=1))
+new$fit <-predict(nls_fit, new)
+
+
+data_set %>% ggplot()+ geom_point(aes(x = AUC_CMI, y =delta_LOG10)) +   
+  geom_line(data=new, aes(x=AUC_CMI, y=fit), color="red")
