@@ -173,6 +173,8 @@ ggplot(areas_LR, aes(x = factor(xCMI), y = area_under_curve_LR, fill = factor(xC
   scale_fill_discrete(name = "xCMI")
 ```
 ```{r}
+library(dplyr)
+
 # Definir la fonction calculate_area_trapezoids_LR
 calculate_area_trapezoids_LR <- function(x, y) {
   area <- sum(diff(x) * (head(y, -1) + tail(y, -1)) / 2)
@@ -201,7 +203,7 @@ auc_combined <- auc_combined %>%
 
 # Calculer LR
 auc_combined <- auc_combined %>%
-  mutate(LR = AUCFU_ref / AUC_test)
+  mutate(LR = AUc_test/AUC_ref)
 
 # Selectionner uniquement les colonnes necessaires pour le tableau final
 tableau_LR <- auc_combined %>%
