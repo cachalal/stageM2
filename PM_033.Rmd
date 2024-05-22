@@ -94,21 +94,28 @@ Ix<-areas$area_under_curve/24
 tableau_Ix <- data.frame(ID = areas$ID, xCMI = areas$xCMI, Ix = Ix)
 
 #taille de l'inoculum de depart
-IBasal<-
+# Filtrer les donnees pour obtenir les valeurs à TIME = 0.00 pour chaque combinaison de xCMI et ID
+valeurs_inoculum <- data_set %>%
+  filter(TIME == 0.00) %>%
+  select(ID, xCMI, LOG10_CFU)
+
+IBasal<-valeurs_inoculum$LOG10_CFU
   
 #croissance moyenne de l'incoulum sur 24h
 delta_i_x<-Ix-IBasal
+
+tableau_delta_i_x<- data.frame(ID = areas$ID, xCMI = areas$xCMI, delta_i_x = delta_i_x)
 ```
 
 #Equation 2 : Modele sigmoide Emax, modelisation de la croissance moyenne de l'inoculum
 ```{r}
 # Definir le modele nls
-essai_model <- nls(delta_i_x ~ delta_i_max - ((delta_i_max - delta_i_min) * ((CONC / EC2LOG)^gam) / (((-2 - delta_i_min) / delta_i_max + 2) + (CONC / EC2LOG)^gam))),
+essai_model <- nls(delta_i_x ~ delta_i_max - ((delta_i_max - delta_i_min) * ((CONC / EC2LOG)^gam) / (((-2 - delta_i_min) / delta_i_max + 2) + (CONC / EC2LOG)^gam)),
                      data = data_set, #nom du dataset
-                     start = list(delta_i_max = max(data_set$delta_LOG10), # valeurs initiales pour aider l'algorithme, prendre les valeurs du tableau publi
-                                  delta_i_min = min(data_set$delta_LOG10),
+                     start = list(delta_i_max = max(tableau_delta_i_x$delta_i_x), # valeurs initiales pour aider l'algorithme, prendre les valeurs du tableau publi
+                                  delta_i_min = min(tableau_delta_i_x$delta_i_x),
                                   EC2LOG = 1.13,
-                                  gam = 2.2) # modifiez l'equation comme dans le publi, avec y = deltaI(x) et x = conc antibio
+                                  gam = 2.2) # modifiez l'equation comme dans la publi, avec y = deltaI(x) et x = conc antibio
 
 #obtenir les valeurs des parametres
 summary(essai_model)
