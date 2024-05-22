@@ -191,7 +191,7 @@ auc_ref <- grouped_data_LR %>%
 auc_test <- grouped_data_LR %>%
   filter(CONC != 0) %>%
   group_by(ID, ratio, CONC,xCMI) %>%
-  summarize(AUC_test = calculate_area_trapezoids_LR(TIME, avg_LOG_CFU), .groups = 'drop')
+  summarize(AUCFU_test = calculate_area_trapezoids_LR(TIME, avg_LOG_CFU), .groups = 'drop')
 
 # Combiner les deux tables en fonction de l'ID
 auc_combined <- auc_test %>%
@@ -199,15 +199,15 @@ auc_combined <- auc_test %>%
 
 # Gerer les cas ou AUCFU_ref ou AUC_test sont NA
 auc_combined <- auc_combined %>%
-  filter(!is.na(AUCFU_ref) & !is.na(AUC_test))
+  filter(!is.na(AUCFU_ref) & !is.na(AUCFU_test))
 
 # Calculer LR
 auc_combined <- auc_combined %>%
-  mutate(LR = AUc_test/AUC_ref)
+  mutate(LR = AUCFU_test/AUCFU_ref)
 
 # Selectionner uniquement les colonnes necessaires pour le tableau final
 tableau_LR <- auc_combined %>%
 
 # Afficher le tableau final des LR
-print(tableau_LR)
+print(tableau_LR)s
 ```
