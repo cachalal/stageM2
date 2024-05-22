@@ -203,7 +203,7 @@ auc_combined <- auc_combined %>%
 
 # Calculer LR
 auc_combined <- auc_combined %>%
-  mutate(LR = AUCFU_test/AUCFU_ref)
+  mutate(LR = log10(AUCFU_test/AUCFU_ref))
 
 # Selectionner uniquement les colonnes necessaires pour le tableau final
 tableau_LR <- auc_combined %>%
