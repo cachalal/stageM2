@@ -110,7 +110,7 @@ tableau_delta_i_x<- data.frame(ID = areas$ID, xCMI = areas$xCMI, delta_i_x = del
 tableau_delta_i_x <- data.frame(ID = areas$ID,
                                 xCMI = areas$xCMI,
                                 delta_i_x = delta_i_x,
-                                CONC = areas$CONC)  # Ajouter la colonne CONC
+                                CONC = areas$CONC)
 
 ```
 
@@ -141,6 +141,7 @@ new$fit <-predict(nls_fit, new)
 data_set %>% ggplot()+ geom_point(aes(x = AUC_CMI, y =delta_LOG10)) +   
   geom_line(data=new, aes(x=AUC_CMI, y=fit), color="red")
 ```
+
 #Log ratio of AUCFU (LR)
 ```{r}
 # Fonction pour calculer l'aire sous une courbe en utilisant la methode des trapezes
@@ -156,7 +157,7 @@ calculate_area_trapezoids_LR <- function(x, y) {
 
 # Agreger les donnees par ID, xCMI et TIME, en calculant la moyenne de LOG10_CFU pour chaque groupe
 grouped_data_LR <- data_set %>%
-  group_by(ID, xCMI, TIME, CONC, ratio) %>%
+  group_by(ID,Idbis, xCMI, TIME, CONC, ratio) %>%
   summarize(avg_LOG_CFU = mean(OBS_CFU, na.rm = TRUE), .groups = 'drop')
 
 # Calculer l'aire sous chaque courbe pour chaque combinaison de ID et xCMI
@@ -173,7 +174,9 @@ ggplot(areas_LR, aes(x = factor(xCMI), y = area_under_curve_LR, fill = factor(xC
   scale_fill_discrete(name = "xCMI")
 ```
 ```{r}
+#Calcul LR
 library(dplyr)
+library(stringr)
 
 # Definir la fonction calculate_area_trapezoids_LR
 calculate_area_trapezoids_LR <- function(x, y) {
@@ -184,7 +187,7 @@ calculate_area_trapezoids_LR <- function(x, y) {
 # Calculer l'AUC pour CONC = 0 (ref)
 auc_ref <- grouped_data_LR %>%
   filter(CONC == 0) %>%
-  group_by(ID) %>%
+  group_by(ID, Idbis) %>%
   summarize(AUCFU_ref = calculate_area_trapezoids_LR(TIME, avg_LOG_CFU), .groups = 'drop')
 
 # Calculer l'AUC pour CONC ≠ 0 (test)
@@ -205,9 +208,43 @@ auc_combined <- auc_combined %>%
 auc_combined <- auc_combined %>%
   mutate(LR = log10(AUCFU_test/AUCFU_ref))
 
-# Selectionner uniquement les colonnes necessaires pour le tableau final
-tableau_LR <- auc_combined %>%
+ tableau_LR <- auc_combined %>%
+    select(CONC, LR, Idbis) %>%
+    mutate(Idbis = substr(Idbis, 1, nchar(Idbis) - 10))
 
 # Afficher le tableau final des LR
-print(tableau_LR)s
+print(tableau_LR)
+
+tableau_LR_pivot <- tableau_LR %>%
+  pivot_wider(names_from = CONC, values_from = LR)
+
+print(tableau_LR_pivot)
 ```
+#Tableau LR
+```{r}
+# Calculer la moyenne des LR par groupe de CONC et Idbis
+tableau_LR_moyenne <- tableau_LR %>%
+  group_by(CONC, Idbis) %>%
+  summarize(mean_LR = mean(LR, na.rm = TRUE))
+
+tableau_LR_pivot_moyenne <- tableau_LR_moyenne %>%
+  pivot_wider(names_from = CONC, values_from = mean_LR)
+
+# Extraire la colonne Idbis
+Idbis_column <- tableau_LR_pivot_moyenne$Idbis
+
+# Réorganiser les autres colonnes
+tableau_LR_pivot_moyenne <- tableau_LR_pivot_moyenne[, -1]
+tableau_LR_pivot_moyenne <- tableau_LR_pivot_moyenne[, order(-as.numeric(colnames(tableau_LR_pivot_moyenne)))]
+
+# Recombiner avec la colonne Idbis
+tableau_LR_pivot_moyenne <- cbind(Idbis_column, tableau_LR_pivot_moyenne)
+
+print(tableau_LR_pivot_moyenne)
+
+
+#Exporter tableau LR_pivot
+library(writexl)
+write_xlsx(tableau_LR_pivot_moyenne, "tableau_LR.xlsx")
+```
+
