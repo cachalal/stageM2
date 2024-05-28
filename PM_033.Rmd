@@ -21,24 +21,29 @@ library(gridExtra)
 
 #data_set
 ```{r}
-data_set <- read_csv2("N:/4_PROJETS/2022/EMAD_22TQ_Ratio/StageM2_2024/Analyse_R/data_set.csv",
-                      col_types = cols(Idbis = col_character(), 
-                                       TIME = col_number(), 
-                                       OBS_CFU = col_number(), 
-                                       LOG10_CFU = col_number(), 
-                                       delta_LOG10 = col_number(), 
-                                       CMI = col_number(), 
-                                       xCMI = col_number(), 
-                                       OUTLIER = col_number(), 
-                                       SHAPE = col_number()), 
-                      trim_ws = TRUE)
+data_set <- read_csv2(
+  "N:/4_PROJETS/2022/EMAD_22TQ_Ratio/StageM2_2024/Analyse_R/data_set.csv",
+  col_types = cols(
+    Idbis = col_character(),
+    TIME = col_number(),
+    OBS_CFU = col_number(),
+    LOG10_CFU = col_number(),
+    delta_LOG10 = col_number(),
+    CMI = col_number(),
+    xCMI = col_number(),
+    OUTLIER = col_number(),
+    CONC_sulf = col_number(),
+    CONC_TMP = col_number()
+  ),
+  trim_ws = TRUE
+)
 
 data_set$ID<-as.factor(data_set$ID)
 
 #Enlever les OUTLIER==1
 data_set %>% filter(OUTLIER==0)->data_set
 
-data_set$CONC<-data_set$CMI*data_set$xCMI
+problems(data_set)
 ```
 
 #Courbes uniques
@@ -68,12 +73,12 @@ calculate_area_trapezoids <- function(x, y) {
 
 # Agreger les donnees par ID, xCMI et TIME, en calculant la moyenne de LOG10_CFU pour chaque groupe
 grouped_data_2 <- data_set %>%
-  group_by(ID, xCMI, TIME, CONC_sulf, CONC_TMP, CONC, Idbis) %>%
+  group_by(ID, xCMI, TIME, CONC_TMP, Idbis) %>%
   summarize(avg_LOG10_CFU = mean(LOG10_CFU, na.rm = TRUE), .groups = 'drop')
 
 # Calculer l'aire sous chaque courbe pour chaque combinaison de ID et xCMI
 areas <- grouped_data_2 %>%
-  group_by(ID, Idbis, xCMI, CONC_sulf, CONC_TMP, CONC) %>%
+  group_by(ID, Idbis, xCMI, CONC_TMP) %>%
   summarize(area_under_curve = calculate_area_trapezoids(TIME, avg_LOG10_CFU), .groups = 'drop')
 
 # AUC : histogramme par xCMI
@@ -89,12 +94,9 @@ ggplot(areas, aes(x = factor(xCMI), y = area_under_curve, fill = factor(xCMI))) 
 ```{r}
 #inoculum moyen obtenu apres exposition à ATB pendant 24h (ou 8h pour ID 3, 5 et 33)
 
-Ix <- ifelse(areas$ID %in% c(3, 5, 33), areas$area_under_curve / 8, areas$area_under_curve / 24)
+Ix <- ifelse(areas$ID %in% c(3, 5, 19, 33), areas$area_under_curve/8, areas$area_under_curve/24)
 
 tableau_Ix <- data.frame(ID = areas$ID, Idbis=areas$Idbis, xCMI = areas$xCMI, Ix = Ix)
-
-tableau_Ix <- tableau_Ix %>%
-  filter(!ID %in% c(3, 5, 33))
 
 #taille de l'inoculum de depart
 # Filtrer les donnees pour obtenir les valeurs à TIME = 0.00 pour chaque combinaison de xCMI et ID
@@ -112,26 +114,35 @@ tableau_delta_i_x<- data.frame(ID = areas$ID, xCMI = areas$xCMI, delta_i_x = del
 tableau_delta_i_x <- data.frame(ID = areas$ID,
                                 xCMI = areas$xCMI,
                                 delta_i_x = delta_i_x,
-                                CONC = areas$CONC)
-
+                                CONC_TMP = areas$CONC_TMP)
 ```
 
 #Equation 2 : Modele sigmoide Emax, modelisation de la croissance moyenne de l'inoculum
 ```{r}
-# Definir le modele nls
-essai_model <- nls(delta_i_x ~ delta_i_max - ((delta_i_max - delta_i_min) * ((CONC / EC2LOG)^gam) / (((-2 - delta_i_min) / delta_i_max + 2) + (CONC / EC2LOG)^gam)),
-                     data = tableau_delta_i_x, # nom du dataset
-                     start = list(delta_i_max = max(tableau_delta_i_x$delta_i_x), # valeurs initiales pour aider l'algorithme, prendre les valeurs du tableau publi
-                                  delta_i_min = min(tableau_delta_i_x$delta_i_x),
-                                  EC2LOG = 1.13,
-                                  gam = 2.2))
- # modifiez l'equation comme dans la publi, avec y = deltaI(x) et x = conc antibio
+start_values <- list(
+   delta_i_max = max(tableau_delta_i_x$delta_i_x, na.rm = TRUE),
+  delta_i_min = min(tableau_delta_i_x$delta_i_x, na.rm = TRUE),
+  EC2LOG = 1.13,
+  gam = 2.2 
+)
+
+library(minpack.lm)
+
+#equation sans ECLOG2
+#essai_model_lm <- nlsLM(delta_i_x ~ delta_i_max - ((delta_i_max - delta_i_min) * ((CONC_TMP / EC)^gam) / (((-delta_i_min) / delta_i_max) + (CONC_TMP / EC)^gam)),data = tableau_delta_i_x,start = start_values)
+
+
+essai_model_lm <- nlsLM(
+ delta_i_x ~ delta_i_max - ((delta_i_max - delta_i_min) * ((CONC_TMP / EC2LOG)^gam) / (((-2 - delta_i_min) / delta_i_max + 2) + (CONC_TMP / EC2LOG)^gam)),
+  data = tableau_delta_i_x_clean,
+  start = start_values)
+
 
 #obtenir les valeurs des parametres
-summary(essai_model)
+summary(essai_model_lm)
 
 #obtenir la valeur de R?
-rsquare(essai_model,data_set)
+rsquare(essai_model_lm,tableau_delta_i_x_clean)
 
 
 #afficher le graphe
@@ -139,7 +150,7 @@ new <- data.frame(AUC_CMI=seq(0, 800, by=1))
 new$fit <-predict(nls_fit, new)
 
 
-data_set %>% ggplot()+ geom_point(aes(x = AUC_CMI, y =delta_LOG10)) +   
+tableau_delta_i_x %>% ggplot()+ geom_point(aes(x = AUC_CMI, y =delta_LOG10)) +   
   geom_line(data=new, aes(x=AUC_CMI, y=fit), color="red")
 ```
 
@@ -158,12 +169,12 @@ calculate_area_trapezoids_LR <- function(x, y) {
 
 # Agreger les donnees par ID, xCMI et TIME, en calculant la moyenne de LOG10_CFU pour chaque groupe
 grouped_data_LR <- data_set %>%
-  group_by(ID,Idbis, xCMI, TIME, CONC_sulf, ratio) %>%
+  group_by(ID,Idbis, xCMI, TIME, CONC_TMP, ratio) %>%
   summarize(avg_LOG_CFU = mean(OBS_CFU, na.rm = TRUE), .groups = 'drop')
 
 # Calculer l'aire sous chaque courbe pour chaque combinaison de ID et xCMI
 areas_LR <- grouped_data_LR %>%
-  group_by(ID, xCMI, CONC_sulf, ratio) %>%
+  group_by(ID, xCMI, CONC_TMP, ratio) %>%
   summarize(area_under_curve_LR = calculate_area_trapezoids_LR (TIME, avg_LOG_CFU), .groups = 'drop')
 
 # AUC : histogramme par xCMI
@@ -188,19 +199,19 @@ calculate_area_trapezoids_LR <- function(x, y) {
 
 # Calculer l'AUC pour CONC = 0 (ref)
 auc_ref <- grouped_data_LR %>%
-  filter(CONC_sulf == 0) %>%
+  filter(CONC_TMP == 0) %>%
   group_by(ID, Idbis) %>%
   summarize(AUCFU_ref = calculate_area_trapezoids_LR(TIME, avg_LOG_CFU), .groups = 'drop')
 
 # Calculer l'AUC pour CONC ≠ 0 (test)
 auc_test <- grouped_data_LR %>%
-  filter(CONC_sulf != 0) %>%
-  group_by(ID, ratio, CONC_sulf,xCMI) %>%
+  filter(CONC_TMP != 0) %>%
+  group_by(Idbis, ratio, CONC_TMP,xCMI) %>%
   summarize(AUCFU_test = calculate_area_trapezoids_LR(TIME, avg_LOG_CFU), .groups = 'drop')
 
 # Combiner les deux tables en fonction de l'ID
 auc_combined <- auc_test %>%
-  left_join(auc_ref, by = "ID")
+  left_join(auc_ref, by = "Idbis")
 
 # Gerer les cas ou AUCFU_ref ou AUC_test sont NA
 auc_combined <- auc_combined %>%
@@ -211,26 +222,27 @@ auc_combined <- auc_combined %>%
   mutate(LR = log10(AUCFU_test/AUCFU_ref))
 
  tableau_LR <- auc_combined %>%
-    select(CONC_sulf, LR, Idbis) %>%
+    select(CONC_TMP, LR, Idbis) %>%
     mutate(Idbis = substr(Idbis, 1, nchar(Idbis) - 10))
 
 # Afficher le tableau final des LR
 print(tableau_LR)
 
 tableau_LR_pivot <- tableau_LR %>%
-  pivot_wider(names_from = CONC_sulf, values_from = LR)
+  pivot_wider(names_from = CONC_TMP, values_from = LR)
 
 print(tableau_LR_pivot)
 ```
+
 #Tableau LR
 ```{r}
 # Calculer la moyenne des LR par groupe de CONC et Idbis
 tableau_LR_moyenne <- tableau_LR %>%
-  group_by(CONC_sulf, Idbis) %>%
+  group_by(CONC_TMP, Idbis) %>%
   summarize(mean_LR = mean(LR, na.rm = TRUE))
 
 tableau_LR_pivot_moyenne <- tableau_LR_moyenne %>%
-  pivot_wider(names_from = CONC_sulf, values_from = mean_LR)
+  pivot_wider(names_from = CONC_TMP, values_from = mean_LR)
 
 # Extraire la colonne Idbis
 Idbis_column <- tableau_LR_pivot_moyenne$Idbis
@@ -247,6 +259,6 @@ print(tableau_LR_pivot_moyenne)
 
 #Exporter tableau LR_pivot
 library(writexl)
-write_xlsx(tableau_LR_pivot_moyenne, "LR_033.xlsx")
+write_xlsx(tableau_LR_pivot_moyenne, "tableau_LR.xlsx")
 ```
 
