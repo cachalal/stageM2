@@ -73,12 +73,12 @@ calculate_area_trapezoids <- function(x, y) {
 
 # Agreger les donnees par ID, xCMI et TIME, en calculant la moyenne de LOG10_CFU pour chaque groupe
 grouped_data_2 <- data_set %>%
-  group_by(ID, xCMI, TIME, CONC_TMP, Idbis) %>%
+  group_by(ID, xCMI, TIME, CONC_TMP, Idbis, ratio, MOLECULE) %>%
   summarize(avg_LOG10_CFU = mean(LOG10_CFU, na.rm = TRUE), .groups = 'drop')
 
 # Calculer l'aire sous chaque courbe pour chaque combinaison de ID et xCMI
 areas <- grouped_data_2 %>%
-  group_by(ID, Idbis, xCMI, CONC_TMP) %>%
+  group_by(ID, Idbis, xCMI, CONC_TMP, ratio, MOLECULE) %>%
   summarize(area_under_curve = calculate_area_trapezoids(TIME, avg_LOG10_CFU), .groups = 'drop')
 
 # AUC : histogramme par xCMI
@@ -109,21 +109,74 @@ IBasal<-valeurs_inoculum$LOG10_CFU
 #croissance moyenne de l'incoulum sur 24h
 delta_i_x<-Ix-IBasal
 
-tableau_delta_i_x<- data.frame(ID = areas$ID, xCMI = areas$xCMI, delta_i_x = delta_i_x)
+tableau_delta_i_x<- data.frame(ID = areas$ID, xCMI = areas$xCMI, Idbis = areas$Idbis, ratio = areas$ratio, MOLECULE =areas$MOLECULE, delta_i_x = delta_i_x)
 
 tableau_delta_i_x <- data.frame(ID = areas$ID,
                                 xCMI = areas$xCMI,
                                 delta_i_x = delta_i_x,
-                                CONC_TMP = areas$CONC_TMP)
+                                CONC_TMP = areas$CONC_TMP,
+                                Idbis = areas$Idbis,
+                                ratio = areas$ratio,
+                                MOLECULE =areas$MOLECULE)
 ```
+
+#delta i x par ATB, seul ou combi
+```{r}
+
+#ATB seuls
+SMX<- tableau_delta_i_x %>%
+  filter(MOLECULE == "SMX" & ratio == 0)
+
+SDMX<- tableau_delta_i_x %>%
+  filter(MOLECULE == "SDMX" & ratio == 0)
+
+SDZ<- tableau_delta_i_x %>%
+  filter(MOLECULE == "SDZ" & ratio == 0)
+
+TMP<- tableau_delta_i_x %>%
+  filter(MOLECULE == "TMP" & ratio == 0)
+
+
+#1_19
+SMX_1_19<- tableau_delta_i_x %>%
+  filter(MOLECULE == "SMX/TMP" & ratio == "1_19")
+
+SDMX_1_19<- tableau_delta_i_x %>%
+  filter(MOLECULE == "SDMX/TMP" & ratio == "1_19")
+
+SDZ_1_19<- tableau_delta_i_x %>%
+  filter(MOLECULE == "SDZ/TMP" & ratio == "1_19")
+
+#1_99
+SMX_1_99<- tableau_delta_i_x %>%
+  filter(MOLECULE == "SMX/TMP" & ratio == "1_99")
+
+SDMX_1_99<- tableau_delta_i_x %>%
+  filter(MOLECULE == "SDMX/TMP" & ratio == "1_99")
+
+SDZ_1_99<- tableau_delta_i_x %>%
+  filter(MOLECULE == "SDZ/TMP" & ratio == "1_99")
+
+#1_999
+SMX_1_999<- tableau_delta_i_x %>%
+  filter(MOLECULE == "SMX/TMP" & ratio == "1_999")
+
+SDMX_1_999<- tableau_delta_i_x %>%
+  filter(MOLECULE == "SDMX/TMP" & ratio == "1_999")
+
+SDZ_1_999<- tableau_delta_i_x %>%
+  filter(MOLECULE == "SDZ/TMP" & ratio == "1_999")
+  
+```
+
 
 #Equation 2 : Modele sigmoide Emax, modelisation de la croissance moyenne de l'inoculum
 ```{r}
 start_values <- list(
-   delta_i_max = max(tableau_delta_i_x$delta_i_x, na.rm = TRUE),
+  delta_i_max = max(tableau_delta_i_x$delta_i_x, na.rm = TRUE),
   delta_i_min = min(tableau_delta_i_x$delta_i_x, na.rm = TRUE),
   EC2LOG = 1.13,
-  gam = 2.2 
+  gam = 2.2
 )
 
 library(minpack.lm)
@@ -134,24 +187,177 @@ library(minpack.lm)
 
 essai_model_lm <- nlsLM(
  delta_i_x ~ delta_i_max - ((delta_i_max - delta_i_min) * ((CONC_TMP / EC2LOG)^gam) / (((-2 - delta_i_min) / delta_i_max + 2) + (CONC_TMP / EC2LOG)^gam)),
-  data = tableau_delta_i_x_clean,
-  start = start_values)
+  data = tableau_delta_i_x,
+  start = start_values,
+  control = nls.lm.control(maxiter = 200))
 
 
 #obtenir les valeurs des parametres
-summary(essai_model_lm)
+parameters <- summary(essai_model_lm)
 
-#obtenir la valeur de R?
-rsquare(essai_model_lm,tableau_delta_i_x_clean)
+print(coef(parameters))
 
+param_table <- data.frame( 
+  Parameter = c("delta_i_max", "delta_i_min", "EC2LOG", "gam"), 
+  Estimate = c(3.608951e+00, -5.902751e-01, 6.349459e-06, 2.821904e-01), 
+  Std_Error = c(0.3470628443, 0.4924019135, 0.0000470201, 0.3483075548), 
+  t_value = c(10.3985529, -1.1987668, 0.1350371, 0.8101758), Pr = c(2.160578e-21, 2.317143e-01, 8.926874e-01, 4.185829e-01) ) 
 
-#afficher le graphe
-new <- data.frame(AUC_CMI=seq(0, 800, by=1))
-new$fit <-predict(nls_fit, new)
+print(param_table)
 
+library(writexl)
+write_xlsx(param_table, "param_033.xlsx")
 
-tableau_delta_i_x %>% ggplot()+ geom_point(aes(x = AUC_CMI, y =delta_LOG10)) +   
-  geom_line(data=new, aes(x=AUC_CMI, y=fit), color="red")
+#obtenir la valeur de R²
+#(essai_model_lm,tableau_delta_i_x)
+
+library(broom)
+
+# Calculer la valeur de R²
+predictions <- predict(essai_model_lm, tableau_delta_i_x)
+residuals <- tableau_delta_i_x$delta_i_x - predictions
+ss_residuals <- sum(residuals^2)
+ss_total <- sum((tableau_delta_i_x$delta_i_x - mean(tableau_delta_i_x$delta_i_x))^2)
+r_squared <- 1 - (ss_residuals / ss_total)
+cat("R-squared:", r_squared, "\n")
+
+plot_by_MOLECULE_ratio <- ggplot(tableau_delta_i_x, aes(x = CONC_TMP, y = delta_i_x)) +
+  geom_point(color = "blue", size = 2) +  # Points des données observées
+  geom_line(aes(y = predict(essai_model_lm, newdata = tableau_delta_i_x)), color = "red", size = 1) +  # Ligne du modèle ajusté
+  labs(title = "", x = "CONC_TMP", y = "delta_i_x") +
+  theme_minimal() +
+  facet_wrap(~ MOLECULE + ratio)
+
+print(plot_by_MOLECULE_ratio)
+
+```
+
+# Tracer les données et le modèle ajusté
+ggplot(tableau_delta_i_x_clean, aes(x = CONC_TMP, y = delta_i_x)) +
+  geom_point(color = "blue", size = 2) +  # Points des données observées
+  geom_line(aes(y = predict(essai_model_lm, newdata = tableau_delta_i_x_clean)), color = "red", linewidth = 1) +  # Ligne du modèle ajusté
+  labs(title = "", x = "CONC_TMP", y = "delta_i_x") +
+  theme_minimal()
+
+#Equation 2 : Modele sigmoide Emax, modelisation de la croissance moyenne de l'inoculum
+```{r}
+start_values <- list(
+  delta_i_max = max(tableau_delta_i_x$delta_i_x, na.rm = TRUE),
+  delta_i_min = min(tableau_delta_i_x$delta_i_x, na.rm = TRUE),
+  EC2LOG = 1.13,
+  gam = 2.2
+)
+
+library(minpack.lm)
+
+#ATBs
+smx <- nlsLM(
+ delta_i_x ~ delta_i_max - ((delta_i_max - delta_i_min) * ((CONC_TMP / EC2LOG)^gam) / (((-2 - delta_i_min) / delta_i_max + 2) + (CONC_TMP / EC2LOG)^gam)),
+  data = SMX,
+  start = start_values,
+  control = nls.lm.control(maxiter = 200))
+
+parameters_smx <- summary(smx)
+
+sdmx <- nlsLM(
+ delta_i_x ~ delta_i_max - ((delta_i_max - delta_i_min) * ((CONC_TMP / EC2LOG)^gam) / (((-2 - delta_i_min) / delta_i_max + 2) + (CONC_TMP / EC2LOG)^gam)),
+  data = SDMX,
+  start = start_values,
+  control = nls.lm.control(maxiter = 200))
+
+parameters_sdmx <- summary(sdmx)
+
+sdz <- nlsLM(
+ delta_i_x ~ delta_i_max - ((delta_i_max - delta_i_min) * ((CONC_TMP / EC2LOG)^gam) / (((-2 - delta_i_min) / delta_i_max + 2) + (CONC_TMP / EC2LOG)^gam)),
+  data = SDZ,
+  start = start_values,
+  control = nls.lm.control(maxiter = 200))
+
+parameters_sdz <- summary(sdz)
+
+tmp <- nlsLM(
+ delta_i_x ~ delta_i_max - ((delta_i_max - delta_i_min) * ((CONC_TMP / EC2LOG)^gam) / (((-2 - delta_i_min) / delta_i_max + 2) + (CONC_TMP / EC2LOG)^gam)),
+  data = TMP,
+  start = start_values,
+  control = nls.lm.control(maxiter = 200))
+
+parameters_tmp <- summary(tmp)
+
+#1_19
+smx_1_19 <- nlsLM(
+ delta_i_x ~ delta_i_max - ((delta_i_max - delta_i_min) * ((CONC_TMP / EC2LOG)^gam) / (((-2 - delta_i_min) / delta_i_max + 2) + (CONC_TMP / EC2LOG)^gam)),
+  data = SMX_1_19,
+  start = start_values,
+  control = nls.lm.control(maxiter = 200))
+
+parameters_smx_1_19 <- summary(smx_1_19)
+
+sdmx_1_19 <- nlsLM(
+ delta_i_x ~ delta_i_max - ((delta_i_max - delta_i_min) * ((CONC_TMP / EC2LOG)^gam) / (((-2 - delta_i_min) / delta_i_max + 2) + (CONC_TMP / EC2LOG)^gam)),
+  data = SDMX_1_19,
+  start = start_values,
+  control = nls.lm.control(maxiter = 200))
+
+parameters_sdmx_1_19 <- summary(sdmx_1_19)
+
+sdz_1_19 <- nlsLM(
+ delta_i_x ~ delta_i_max - ((delta_i_max - delta_i_min) * ((CONC_TMP / EC2LOG)^gam) / (((-2 - delta_i_min) / delta_i_max + 2) + (CONC_TMP / EC2LOG)^gam)),
+  data = SDZ_1_19,
+  start = start_values,
+  control = nls.lm.control(maxiter = 200))
+
+parameters_sdz_1_19 <- summary(sdz_1_19)
+
+#1_99
+smx_1_99 <- nlsLM(
+ delta_i_x ~ delta_i_max - ((delta_i_max - delta_i_min) * ((CONC_TMP / EC2LOG)^gam) / (((-2 - delta_i_min) / delta_i_max + 2) + (CONC_TMP / EC2LOG)^gam)),
+  data = SMX_1_99,
+  start = start_values,
+  control = nls.lm.control(maxiter = 200))
+
+parameters_smx_1_99 <- summary(smx_1_99)
+
+sdmx_1_99 <- nlsLM(
+ delta_i_x ~ delta_i_max - ((delta_i_max - delta_i_min) * ((CONC_TMP / EC2LOG)^gam) / (((-2 - delta_i_min) / delta_i_max + 2) + (CONC_TMP / EC2LOG)^gam)),
+  data = SDMX_1_99,
+  start = start_values,
+  control = nls.lm.control(maxiter = 200))
+
+parameters_sdmx_1_99 <- summary(sdmx_1_99)
+
+sdz_1_99 <- nlsLM(
+ delta_i_x ~ delta_i_max - ((delta_i_max - delta_i_min) * ((CONC_TMP / EC2LOG)^gam) / (((-2 - delta_i_min) / delta_i_max + 2) + (CONC_TMP / EC2LOG)^gam)),
+  data = SDZ_1_99,
+  start = start_values,
+  control = nls.lm.control(maxiter = 200))
+
+parameters_sdz_1_99 <- summary(sdz_1_99)
+
+#1_999
+smx_1_999 <- nlsLM(
+ delta_i_x ~ delta_i_max - ((delta_i_max - delta_i_min) * ((CONC_TMP / EC2LOG)^gam) / (((-2 - delta_i_min) / delta_i_max + 2) + (CONC_TMP / EC2LOG)^gam)),
+  data = SMX_1_999,
+  start = start_values,
+  control = nls.lm.control(maxiter = 200))
+
+parameters_smx_1_999 <- summary(smx_1_999)
+
+sdmx_1_999 <- nlsLM(
+ delta_i_x ~ delta_i_max - ((delta_i_max - delta_i_min) * ((CONC_TMP / EC2LOG)^gam) / (((-2 - delta_i_min) / delta_i_max + 2) + (CONC_TMP / EC2LOG)^gam)),
+  data = SDMX_1_99,
+  start = start_values,
+  control = nls.lm.control(maxiter = 200))
+
+parameters_sdmx_1_999 <- summary(sdmx_1_999)
+
+sdz_1_999 <- nlsLM(
+ delta_i_x ~ delta_i_max - ((delta_i_max - delta_i_min) * ((CONC_TMP / EC2LOG)^gam) / (((-2 - delta_i_min) / delta_i_max + 2) + (CONC_TMP / EC2LOG)^gam)),
+  data = SDZ_1_999,
+  start = start_values,
+  control = nls.lm.control(maxiter = 200))
+
+parameters_sdz_1_999 <- summary(sdz_1_999)
+
 ```
 
 #Log ratio of AUCFU (LR)
