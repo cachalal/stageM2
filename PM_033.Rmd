@@ -141,8 +141,22 @@ TMP<- tableau_delta_i_x %>%
 SMX_1_19<- tableau_delta_i_x %>%
   filter(MOLECULE == "SMX/TMP" & ratio == "1_19")
 
+ggplot(SMX_1_19, aes(x = CONC_TMP)) +
+  geom_point(aes(y = delta_i_x)) +
+  labs(title = "Graph of delta_i_x vs CONC_TMP",
+       x = "Concentration TMP (CONC_TMP)",
+       y = "Delta I X (delta_i_x)") +
+  theme_minimal()
+
 SDMX_1_19<- tableau_delta_i_x %>%
   filter(MOLECULE == "SDMX/TMP" & ratio == "1_19")
+
+ggplot(SDMX_1_19, aes(x = CONC_TMP)) +
+  geom_point(aes(y = delta_i_x)) +
+  labs(title = "Graph of delta_i_x vs CONC_TMP",
+       x = "Concentration TMP (CONC_TMP)",
+       y = "Delta I X (delta_i_x)") +
+  theme_minimal()
 
 SDZ_1_19<- tableau_delta_i_x %>%
   filter(MOLECULE == "SDZ/TMP" & ratio == "1_19")
@@ -154,6 +168,13 @@ SMX_1_99<- tableau_delta_i_x %>%
 SDMX_1_99<- tableau_delta_i_x %>%
   filter(MOLECULE == "SDMX/TMP" & ratio == "1_99")
 
+ggplot(SDMX_1_99, aes(x = CONC_TMP)) +
+  geom_point(aes(y = delta_i_x)) +
+  labs(title = "Graph of delta_i_x vs CONC_TMP",
+       x = "Concentration TMP (CONC_TMP)",
+       y = "Delta I X (delta_i_x)") +
+  theme_minimal()
+
 SDZ_1_99<- tableau_delta_i_x %>%
   filter(MOLECULE == "SDZ/TMP" & ratio == "1_99")
 
@@ -163,6 +184,13 @@ SMX_1_999<- tableau_delta_i_x %>%
 
 SDMX_1_999<- tableau_delta_i_x %>%
   filter(MOLECULE == "SDMX/TMP" & ratio == "1_999")
+
+ggplot(SDMX_1_999, aes(x = CONC_TMP)) +
+  geom_point(aes(y = delta_i_x)) +
+  labs(title = "Graph of delta_i_x vs CONC_TMP",
+       x = "Concentration TMP (CONC_TMP)",
+       y = "Delta I X (delta_i_x)") +
+  theme_minimal()
 
 SDZ_1_999<- tableau_delta_i_x %>%
   filter(MOLECULE == "SDZ/TMP" & ratio == "1_999")
@@ -248,6 +276,13 @@ start_values <- list(
   gam = 2.2
 )
 
+start_values_2 <- list(
+  delta_i_max = max(tableau_delta_i_x$delta_i_x, na.rm = TRUE),
+  delta_i_min = min(tableau_delta_i_x$delta_i_x, na.rm = TRUE),
+  EC4LOG = 1.13,
+  gam = 2.2
+)
+
 library(minpack.lm)
 
 #ATBs
@@ -258,6 +293,7 @@ smx <- nlsLM(
   control = nls.lm.control(maxiter = 200))
 
 parameters_smx <- summary(smx)
+print(coef(parameters_smx))
 
 sdmx <- nlsLM(
  delta_i_x ~ delta_i_max - ((delta_i_max - delta_i_min) * ((CONC_TMP / EC2LOG)^gam) / (((-2 - delta_i_min) / delta_i_max + 2) + (CONC_TMP / EC2LOG)^gam)),
@@ -266,6 +302,7 @@ sdmx <- nlsLM(
   control = nls.lm.control(maxiter = 200))
 
 parameters_sdmx <- summary(sdmx)
+print(coef(parameters_sdmx))
 
 sdz <- nlsLM(
  delta_i_x ~ delta_i_max - ((delta_i_max - delta_i_min) * ((CONC_TMP / EC2LOG)^gam) / (((-2 - delta_i_min) / delta_i_max + 2) + (CONC_TMP / EC2LOG)^gam)),
@@ -274,6 +311,7 @@ sdz <- nlsLM(
   control = nls.lm.control(maxiter = 200))
 
 parameters_sdz <- summary(sdz)
+print(coef(parameters_sdz))
 
 tmp <- nlsLM(
  delta_i_x ~ delta_i_max - ((delta_i_max - delta_i_min) * ((CONC_TMP / EC2LOG)^gam) / (((-2 - delta_i_min) / delta_i_max + 2) + (CONC_TMP / EC2LOG)^gam)),
@@ -282,81 +320,91 @@ tmp <- nlsLM(
   control = nls.lm.control(maxiter = 200))
 
 parameters_tmp <- summary(tmp)
+print(coef(parameters_tmp))
 
 #1_19
 smx_1_19 <- nlsLM(
- delta_i_x ~ delta_i_max - ((delta_i_max - delta_i_min) * ((CONC_TMP / EC2LOG)^gam) / (((-2 - delta_i_min) / delta_i_max + 2) + (CONC_TMP / EC2LOG)^gam)),
+ delta_i_x ~ delta_i_max - ((delta_i_max - delta_i_min) * ((CONC_TMP / EC4LOG)^gam) / (((-4 - delta_i_min) / delta_i_max + 4) + (CONC_TMP / EC4LOG)^gam)),
   data = SMX_1_19,
-  start = start_values,
+  start = start_values_2,
   control = nls.lm.control(maxiter = 200))
 
 parameters_smx_1_19 <- summary(smx_1_19)
+print(coef(parameters_smx_1_19))
 
 sdmx_1_19 <- nlsLM(
- delta_i_x ~ delta_i_max - ((delta_i_max - delta_i_min) * ((CONC_TMP / EC2LOG)^gam) / (((-2 - delta_i_min) / delta_i_max + 2) + (CONC_TMP / EC2LOG)^gam)),
+ delta_i_x ~ delta_i_max - ((delta_i_max - delta_i_min) * ((CONC_TMP / EC4LOG)^gam) / (((-4 - delta_i_min) / delta_i_max + 4) + (CONC_TMP / EC4LOG)^gam)),
   data = SDMX_1_19,
-  start = start_values,
+  start = start_values_2,
   control = nls.lm.control(maxiter = 200))
 
 parameters_sdmx_1_19 <- summary(sdmx_1_19)
+print(coef(parameters_sdmx_1_19))
 
 sdz_1_19 <- nlsLM(
- delta_i_x ~ delta_i_max - ((delta_i_max - delta_i_min) * ((CONC_TMP / EC2LOG)^gam) / (((-2 - delta_i_min) / delta_i_max + 2) + (CONC_TMP / EC2LOG)^gam)),
+ delta_i_x ~ delta_i_max - ((delta_i_max - delta_i_min) * ((CONC_TMP / EC4LOG)^gam) / (((-4 - delta_i_min) / delta_i_max + 4) + (CONC_TMP / EC4LOG)^gam)),
   data = SDZ_1_19,
-  start = start_values,
+  start = start_values_2,
   control = nls.lm.control(maxiter = 200))
 
 parameters_sdz_1_19 <- summary(sdz_1_19)
+print(coef(parameters_sdz_1_19))
 
 #1_99
 smx_1_99 <- nlsLM(
- delta_i_x ~ delta_i_max - ((delta_i_max - delta_i_min) * ((CONC_TMP / EC2LOG)^gam) / (((-2 - delta_i_min) / delta_i_max + 2) + (CONC_TMP / EC2LOG)^gam)),
+ delta_i_x ~ delta_i_max - ((delta_i_max - delta_i_min) * ((CONC_TMP / EC4LOG)^gam) / (((-4 - delta_i_min) / delta_i_max + 4) + (CONC_TMP / EC4LOG)^gam)),
   data = SMX_1_99,
-  start = start_values,
+  start = start_values_2,
   control = nls.lm.control(maxiter = 200))
 
 parameters_smx_1_99 <- summary(smx_1_99)
+print(coef(parameters_smx_1_99))
 
 sdmx_1_99 <- nlsLM(
- delta_i_x ~ delta_i_max - ((delta_i_max - delta_i_min) * ((CONC_TMP / EC2LOG)^gam) / (((-2 - delta_i_min) / delta_i_max + 2) + (CONC_TMP / EC2LOG)^gam)),
+ delta_i_x ~ delta_i_max - ((delta_i_max - delta_i_min) * ((CONC_TMP / EC4LOG)^gam) / (((-4 - delta_i_min) / delta_i_max + 4) + (CONC_TMP / EC4LOG)^gam)),
   data = SDMX_1_99,
-  start = start_values,
+  start = start_values_2,
   control = nls.lm.control(maxiter = 200))
 
 parameters_sdmx_1_99 <- summary(sdmx_1_99)
+print(coef(parameters_sdmx_1_99))
 
 sdz_1_99 <- nlsLM(
- delta_i_x ~ delta_i_max - ((delta_i_max - delta_i_min) * ((CONC_TMP / EC2LOG)^gam) / (((-2 - delta_i_min) / delta_i_max + 2) + (CONC_TMP / EC2LOG)^gam)),
+ delta_i_x ~ delta_i_max - ((delta_i_max - delta_i_min) * ((CONC_TMP / EC4LOG)^gam) / (((-4 - delta_i_min) / delta_i_max + 4) + (CONC_TMP / EC4LOG)^gam)),
   data = SDZ_1_99,
-  start = start_values,
+  start = start_values_2,
   control = nls.lm.control(maxiter = 200))
 
 parameters_sdz_1_99 <- summary(sdz_1_99)
+print(coef(parameters_sdz_1_99))
 
 #1_999
 smx_1_999 <- nlsLM(
- delta_i_x ~ delta_i_max - ((delta_i_max - delta_i_min) * ((CONC_TMP / EC2LOG)^gam) / (((-2 - delta_i_min) / delta_i_max + 2) + (CONC_TMP / EC2LOG)^gam)),
+ delta_i_x ~ delta_i_max - ((delta_i_max - delta_i_min) * ((CONC_TMP / EC4LOG)^gam) / (((-4 - delta_i_min) / delta_i_max + 4) + (CONC_TMP / EC4LOG)^gam)),
   data = SMX_1_999,
-  start = start_values,
+  start = start_values_2,
   control = nls.lm.control(maxiter = 200))
 
 parameters_smx_1_999 <- summary(smx_1_999)
+print(coef(parameters_smx_1_999))
 
 sdmx_1_999 <- nlsLM(
- delta_i_x ~ delta_i_max - ((delta_i_max - delta_i_min) * ((CONC_TMP / EC2LOG)^gam) / (((-2 - delta_i_min) / delta_i_max + 2) + (CONC_TMP / EC2LOG)^gam)),
+ delta_i_x ~ delta_i_max - ((delta_i_max - delta_i_min) * ((CONC_TMP / EC4LOG)^gam) / (((-4 - delta_i_min) / delta_i_max + 4) + (CONC_TMP / EC4LOG)^gam)),
   data = SDMX_1_99,
-  start = start_values,
+  start = start_values_2,
   control = nls.lm.control(maxiter = 200))
 
 parameters_sdmx_1_999 <- summary(sdmx_1_999)
+print(coef(parameters_sdmx_1_999))
 
 sdz_1_999 <- nlsLM(
- delta_i_x ~ delta_i_max - ((delta_i_max - delta_i_min) * ((CONC_TMP / EC2LOG)^gam) / (((-2 - delta_i_min) / delta_i_max + 2) + (CONC_TMP / EC2LOG)^gam)),
+ delta_i_x ~ delta_i_max - ((delta_i_max - delta_i_min) * ((CONC_TMP / EC4LOG)^gam) / (((-4 - delta_i_min) / delta_i_max + 4) + (CONC_TMP / EC4LOG)^gam)),
   data = SDZ_1_999,
-  start = start_values,
+  start = start_values_2,
   control = nls.lm.control(maxiter = 200))
 
 parameters_sdz_1_999 <- summary(sdz_1_999)
+print(coef(parameters_sdz_1_999))
 
 ```
 
